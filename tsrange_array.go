@@ -5,6 +5,7 @@ package pgtype
 import (
 	"database/sql/driver"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -467,4 +468,66 @@ func (src TsrangeArray) Value() (driver.Value, error) {
 	}
 
 	return string(buf), nil
+}
+
+func (src TsrangeArray) MarshalJSON() ([]byte, error) {
+	switch src.Status { //
+	case Present:
+		if len(src.Dimensions) > 1 {
+			break // goto multidimentional array encode
+		}
+		// avoid default json.Marshal behavior for nil Element slices, this behavior is defined by src.Status
+		// if src.Elements == nil {
+		// return []byte("[]"), nil
+		// }
+		// WHY? what about nil multidimentional values?
+
+		return json.Marshal(src.Elements)
+	case Null:
+		return []byte("null"), nil
+	case Undefined:
+		return nil, errUndefined
+	default:
+		return nil, errBadStatus
+	}
+
+	// Encode multidimentional array
+	dimElemCounts := getDimentionsElememntCounts(src.Dimensions)
+	var bytes []byte
+	for i, elem := range src.Elements {
+		if i > 0 {
+			bytes = append(bytes, ',')
+		}
+		for _, dec := range dimElemCounts {
+			if i%dec == 0 {
+				bytes = append(bytes, '[')
+			}
+		}
+
+		eb, err := json.Marshal(elem)
+		if err != nil {
+			return nil, err
+		}
+		bytes = append(bytes, eb...)
+
+		for _, dec := range dimElemCounts {
+			if (i+1)%dec == 0 {
+				bytes = append(bytes, ']')
+			}
+		}
+	}
+	return bytes, nil
+}
+
+func (dst *TsrangeArray) UnmarshalJSON(b []byte) error {
+	if err := json.Unmarshal(b, &dst.Elements); err != nil {
+		return err
+	}
+
+	dst.Status = Present
+	if dst.Elements == nil {
+		dst.Status = Null
+	}
+
+	return nil
 }

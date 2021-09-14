@@ -37,3 +37,11 @@ func (dst *GenericText) Scan(src interface{}) error {
 func (src GenericText) Value() (driver.Value, error) {
 	return (Text)(src).Value()
 }
+
+func (dst GenericText) MarshalJSON() ([]byte, error) {
+	return (Text)(dst).MarshalJSON()
+}
+
+func (src *GenericText) UnmarshalJSON(b []byte) error {
+	return (*Text)(src).UnmarshalJSON(b)
+}

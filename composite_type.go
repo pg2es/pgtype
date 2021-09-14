@@ -1,10 +1,13 @@
 package pgtype
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgio"
@@ -294,6 +297,46 @@ func (src CompositeType) EncodeText(ci *ConnInfo, buf []byte) (newBuf []byte, er
 	}
 
 	return b.Finish()
+}
+
+func (src *CompositeType) MarshalJSON() ([]byte, error) {
+	switch src.status {
+	case Present:
+		break
+	case Null:
+		return []byte("null"), nil
+	default:
+		return []byte("{}"), nil
+	}
+
+	buf := bytes.Buffer{}
+	buf.WriteByte('{')
+	for i := range src.valueTranscoders {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		buf.WriteString(strconv.Quote(src.fields[i].Name))
+		buf.WriteByte(':')
+
+		// TODO marshaller check
+		var (
+			val []byte
+			err error
+		)
+		if marshaller, ok := src.valueTranscoders[i].(json.Marshaler); ok {
+
+			val, err = marshaller.MarshalJSON()
+		} else {
+			val, err = json.Marshal(src.valueTranscoders[i].Get())
+		}
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(val)
+
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
 }
 
 type CompositeBinaryScanner struct {
