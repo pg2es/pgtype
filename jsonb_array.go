@@ -73,6 +73,25 @@ func (dst *JSONBArray) Set(src interface{}) error {
 			}
 		}
 
+	case []json.RawMessage:
+		if value == nil {
+			*dst = JSONBArray{Status: Null}
+		} else if len(value) == 0 {
+			*dst = JSONBArray{Status: Present}
+		} else {
+			elements := make([]JSONB, len(value))
+			for i := range value {
+				if err := elements[i].Set(value[i]); err != nil {
+					return err
+				}
+			}
+			*dst = JSONBArray{
+				Elements:   elements,
+				Dimensions: []ArrayDimension{{Length: int32(len(elements)), LowerBound: 1}},
+				Status:     Present,
+			}
+		}
+
 	case []JSONB:
 		if value == nil {
 			*dst = JSONBArray{Status: Null}
@@ -208,6 +227,15 @@ func (src *JSONBArray) AssignTo(dst interface{}) error {
 
 			case *[][]byte:
 				*v = make([][]byte, len(src.Elements))
+				for i := range src.Elements {
+					if err := src.Elements[i].AssignTo(&((*v)[i])); err != nil {
+						return err
+					}
+				}
+				return nil
+
+			case *[]json.RawMessage:
+				*v = make([]json.RawMessage, len(src.Elements))
 				for i := range src.Elements {
 					if err := src.Elements[i].AssignTo(&((*v)[i])); err != nil {
 						return err
